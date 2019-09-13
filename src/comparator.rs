@@ -35,7 +35,6 @@ pub fn read_metadata(file: &Path) -> Result<FileType, Error> {
     let metadata = fs::symlink_metadata(file)?;
 
     if metadata.file_type().is_symlink() {
-        // println!("{} is a symlink", file.display());
         Ok(FileType::Symlink(read_link(file)?))
     } else if metadata.file_type().is_dir() {
         Ok(FileType::Dir(DirMetadata {
@@ -67,9 +66,7 @@ fn read_file_content(path: &Path) -> Result<Vec<u8>, Error> {
 pub fn compare_files(prefix1: &PathBuf, prefix2: &PathBuf, file: &Path)
     -> Result<(bool, FileType, FileType), Error> {
     let f1 = prefix1.join(file);
-    // println!("{}", f1.display());
     let f2 = prefix2.join(file);
-    // println!("{}", f2.display());
     let m1 = read_metadata(&f1)?;
     let m2 = read_metadata(&f2)?;
     match (&m1, &m2) {
@@ -88,13 +85,11 @@ fn read_selinux_label(file: &Path) -> Result<Option<String>, Error> {
     if let Ok(attr) = xattr::get(file, attribute) {
         if let Some(label_bytes) = attr {
             if let Ok(label_str) = str::from_utf8(&label_bytes) {
-                //println!("SELinux label: {}", label_str);
                 Ok(Some(label_str.into()))
             } else {
                 Err(Error::SELinux("SELinux label is not valid UTF-8"))
             }
         } else {
-            //Err("SELinux label is empty.");
             Ok(None)
         }
     } else {

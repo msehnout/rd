@@ -15,7 +15,7 @@ use std::process::exit;
 use std::str;
 use std::str::FromStr;
 
-// Write the Docopt usage string.
+// See docopt documentation for more info about the format.
 const USAGE: &'static str = "
 Usage: rd [-V] <fstree1> <fstree2>
        rd [-h]
