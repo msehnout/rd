@@ -1,0 +1,12 @@
+[package]
+name = "rd"
+version = "0.1.0"
+authors = ["Martin Sehnoutka <msehnout@redhat.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+xattr = "0.2"
+walkdir = "2"
+docopt = "1.1"
