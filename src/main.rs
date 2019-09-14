@@ -64,7 +64,7 @@ fn run(fstree1: PathBuf, fstree2: PathBuf) -> Result<(), Error> {
                 println!("Different metadata for file: {}", f.display());
                 println!("f1: {:?}", f1);
                 println!("f2: {:?}", f2);
-            },
+            }
             Err(e) => {
                 println!("Failed on {}", f.display());
                 return Err(e);
@@ -76,10 +76,16 @@ fn run(fstree1: PathBuf, fstree2: PathBuf) -> Result<(), Error> {
     Ok(())
 }
 
-fn process_dir_entry(prefix: &Path, de: Result<walkdir::DirEntry, walkdir::Error>) -> Result<PathBuf, Error> {
+/// Take directory entry `de` and strip the `prefix`. This is a separate function just for clarity
+/// of the `fstree_to_set`.
+fn process_dir_entry(prefix: &Path, de: Result<walkdir::DirEntry, walkdir::Error>)
+                     -> Result<PathBuf, Error>
+{
     Ok(de?.path().strip_prefix(prefix)?.to_owned())
 }
 
+/// Take a filesystem tree and turn in into ordered (that's why BTree) set of files without leading
+/// prefix.
 fn fstree_to_set(fstree: &Path) -> Result<BTreeSet<PathBuf>, Error> {
     WalkDir::new(fstree)
         .into_iter()
@@ -87,6 +93,7 @@ fn fstree_to_set(fstree: &Path) -> Result<BTreeSet<PathBuf>, Error> {
         .collect()
 }
 
+/// TODO: this can be removed once I change the output to JSON
 fn symmetric_difference(a: &BTreeSet<PathBuf>, b: &BTreeSet<PathBuf>) {
     let diff_a_b = a - b;
     println!("### A contains, but B does not:");
