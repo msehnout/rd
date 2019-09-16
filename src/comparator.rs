@@ -6,6 +6,10 @@ use std::os::unix::fs::MetadataExt;
 
 use super::error::Error;
 
+trait ListDifferences {
+    fn list_differences(&self, other: &Self) -> Vec<(String, String)>;
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileMetadata {
     mode: u32,
@@ -15,12 +19,53 @@ pub struct FileMetadata {
     selinux_label: Option<String>,
 }
 
+impl ListDifferences for FileMetadata {
+    fn list_differences(&self, other: &FileMetadata) -> Vec<(String, String)> {
+        let mut ret = Vec::new();
+        if self.mode != other.mode {
+           ret.push(("mode".into(), self.mode.to_string()))
+        }
+        if self.uid != other.uid {
+            ret.push(("uid".into(), self.uid.to_string()))
+        }
+        if self.gid != other.gid {
+            ret.push(("gid".into(), self.gid.to_string()))
+        }
+        if self.size != other.size {
+            ret.push(("size".into(), self.size.to_string()))
+        }
+        if self.selinux_label != other.selinux_label {
+            ret.push(("selinux_label".into(), self.selinux_label.clone().unwrap_or("".into())))
+        }
+        ret
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct DirMetadata {
     mode: u32,
     uid: u32,
     gid: u32,
     selinux_label: Option<String>,
+}
+
+impl ListDifferences for DirMetadata {
+    fn list_differences(&self, other: &DirMetadata) -> Vec<(String, String)> {
+        let mut ret = Vec::new();
+        if self.mode != other.mode {
+            ret.push(("mode".into(), self.mode.to_string()))
+        }
+        if self.uid != other.uid {
+            ret.push(("uid".into(), self.uid.to_string()))
+        }
+        if self.gid != other.gid {
+            ret.push(("gid".into(), self.gid.to_string()))
+        }
+        if self.selinux_label != other.selinux_label {
+            ret.push(("selinux_label".into(), self.selinux_label.clone().unwrap_or("".into())))
+        }
+        ret
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -66,20 +111,36 @@ fn read_file_content(path: &Path) -> Result<Vec<u8>, Error> {
 /// Compare single file in two filesystem trees. In case it is a regular file, compare its content
 /// as well.
 pub fn compare_files(prefix1: &PathBuf, prefix2: &PathBuf, file: &Path)
-    -> Result<(bool, FileType, FileType), Error> {
+    -> Result<(bool, Vec<(String, String)>), Error> {
     let f1 = prefix1.join(file);
     let f2 = prefix2.join(file);
-    let m1 = read_metadata(&f1)?;
-    let m2 = read_metadata(&f2)?;
-    match (&m1, &m2) {
+    let type1 = read_metadata(&f1)?;
+    let type2 = read_metadata(&f2)?;
+    match (&type1, &type2) {
         // For regular file, compare their content
-        (FileType::File(_), FileType::File(_)) => {
+        (FileType::File(m1), FileType::File(m2)) => {
             let c1 = read_file_content(&f1)?;
             let c2 = read_file_content(&f2)?;
-            Ok((m1 == m2 && c1 == c2, m1, m2))
+            let same_content = c1 == c2;
+            if m1 == m2 && same_content {
+                Ok((true, Vec::new()))
+            } else {
+                let mut ret = m1.list_differences(&m2);
+                if !same_content {
+                    ret.push(("content".into(), "different".into()))
+                }
+                Ok((false, ret))
+            }
+        },
+        (FileType::Dir(m1), FileType::Dir(m2)) => {
+            if m1 == m2 {
+                Ok((true, Vec::new()))
+            } else {
+                Ok((false, m1.list_differences(&m2)))
+            }
         },
         // Any other case
-        _ => Ok((m1 == m2, m1, m2)),
+        _ => Ok((&type1 == &type2, Vec::new())),
     }
 
 }

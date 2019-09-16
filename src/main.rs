@@ -5,8 +5,9 @@ use error::Error;
 use comparator::{FileMetadata, read_metadata, compare_files};
 
 use docopt::Docopt;
-use xattr;
+use serde_json::{json, Value};
 use walkdir::{WalkDir, DirEntry};
+use xattr;
 
 use std::collections::BTreeSet;
 use std::hash::Hash;
@@ -16,14 +17,17 @@ use std::str;
 use std::str::FromStr;
 
 // See docopt documentation for more info about the format.
-const USAGE: &'static str = "
+const USAGE: &'static str = r#"
+Compare two filesystem trees. The first one is considered "the original" and the following one
+"the new one". In will output JSON structure with differences in these two trees.
+
 Usage: rd [-V] <fstree1> <fstree2>
        rd [-h]
 
 Options:
-    -V, --verbose  Produce huuuge amount of output
+    -V, --verbose  Produce huuuge amount of output (TODO)
     -h, --help     Print this help
-";
+"#;
 
 fn main() {
     // Parse argv and exit the program with an error message if it fails.
@@ -55,15 +59,18 @@ fn run(fstree1: PathBuf, fstree2: PathBuf) -> Result<(), Error> {
     let a: BTreeSet<_> = fstree_to_set(&fstree1)?;
     let b: BTreeSet<_> = fstree_to_set(&fstree2)?;
 
-    symmetric_difference(&a, &b);
-    symmetric_difference(&b, &a);
+    let deleted_files = symmetric_difference(&a, &b);
+    let added_files = symmetric_difference(&b, &a);
+
+    let mut differences: Vec<Value> = Vec::new();
 
     for f in a.intersection(&b) {
         match compare_files(&fstree1, &fstree2, f) {
-            Ok((false, f1, f2)) => {
-                println!("Different metadata for file: {}", f.display());
-                println!("f1: {:?}", f1);
-                println!("f2: {:?}", f2);
+            Ok((false, difference)) => {
+                differences.push(json!({
+                    "name": f.to_str(),
+                    "differences": difference
+                }))
             }
             Err(e) => {
                 println!("Failed on {}", f.display());
@@ -72,6 +79,14 @@ fn run(fstree1: PathBuf, fstree2: PathBuf) -> Result<(), Error> {
             _ => {}
         }
     }
+
+    let output = json!({
+        "deleted_files": deleted_files,
+        "added_files": added_files,
+        "differences": differences
+    });
+
+    println!("{}", serde_json::to_string_pretty(&output).unwrap_or("Failed to format JSON".into()));
 
     Ok(())
 }
@@ -93,10 +108,12 @@ fn fstree_to_set(fstree: &Path) -> Result<BTreeSet<PathBuf>, Error> {
         .collect()
 }
 
-/// TODO: this can be removed once I change the output to JSON
-fn symmetric_difference(a: &BTreeSet<PathBuf>, b: &BTreeSet<PathBuf>) {
-    let diff_a_b = a - b;
-    println!("### A contains, but B does not:");
-    diff_a_b.iter().for_each(|i| println!("{}", i.display()));
-    println!("###");
+/// Return a list of files present in the first set, but not in the second
+fn symmetric_difference(first: &BTreeSet<PathBuf>, second: &BTreeSet<PathBuf>)
+                        -> Vec<PathBuf>
+{
+    let diff_a_b = first - second;
+    // to_owned clones all the paths, but since this function is expected to return a short list,
+    // I don't think that matters
+    diff_a_b.iter().map(ToOwned::to_owned).collect()
 }
